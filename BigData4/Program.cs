@@ -6,74 +6,80 @@ class Program
 {
     static void Main()
     {
-        // Задаємо розміри матриць
-        int[,] matrixA = { { 1, 2 }, { 3, 4 } };
-        int[,] matrixB = { { 5, 6 }, { 7, 8 } };
+        // Ініціалізація матриць
+        int[,] matrixA = { { 1, 2, 3 }, { 4, 5, 6 } };
+        int[,] matrixB = { { 7, 8 }, { 9, 10 }, { 11, 12 } };
 
-        // Викликаємо MapReduce для множення матриць
-        int[,] result = MapReduceMatrixMultiply(matrixA, matrixB);
+        // Перетворення матриць у формат для MapReduce
+        List<KeyValuePair<int, int>> mapInput = MapInput(matrixA, matrixB);
 
-        // Виводимо результат
-        Console.WriteLine("Result Matrix:");
-        PrintMatrix(result);
+        // Застосування MapReduce
+        List<KeyValuePair<int, int>> reduceOutput = MapReduce(mapInput, matrixA, matrixB);
+
+        // Виведення результату
+        Console.WriteLine("Результат матриці:");
+        PrintMatrix(reduceOutput);
+
+        Console.ReadKey();
     }
 
-    static int[,] MapReduceMatrixMultiply(int[,] matrixA, int[,] matrixB)
+    // Генерує список пар індексів для кожної комбінації рядка і стовпця матриці
+    static List<KeyValuePair<int, int>> MapInput(int[,] matrixA, int[,] matrixB)
     {
-        int rowsA = matrixA.GetLength(0);
-        int colsA = matrixA.GetLength(1);
-        int rowsB = matrixB.GetLength(0);
-        int colsB = matrixB.GetLength(1);
+        List<KeyValuePair<int, int>> mapInput = new List<KeyValuePair<int, int>>();
 
-        if (colsA != rowsB)
+        for (int i = 0; i < matrixA.GetLength(0); i++)
         {
-            throw new InvalidOperationException("Неможливо виконати множення матриць. Кількість стовпців першої матриці не дорівнює кількості рядків другої.");
-        }
-
-        // Створюємо список для результатів
-        List<Tuple<int, int, int>> intermediateResults = new List<Tuple<int, int, int>>();
-
-        // Map: Генеруємо проміжні значення для кожної пари (i, k, A[i, k] * B[k, j])
-        for (int i = 0; i < rowsA; i++)
-        {
-            for (int j = 0; j < colsB; j++)
+            for (int j = 0; j < matrixB.GetLength(1); j++)
             {
-                for (int k = 0; k < colsA; k++)
-                {
-                    intermediateResults.Add(Tuple.Create(i, j, matrixA[i, k] * matrixB[k, j]));
-                }
+                mapInput.Add(new KeyValuePair<int, int>(i, j));
             }
         }
 
-        // Reduce: Сумуємо проміжні значення для кожної пари (i, j)
-        var groupedResults = intermediateResults.GroupBy(tuple => new { tuple.Item1, tuple.Item2 });
-
-        // Створюємо результуючу матрицю
-        int[,] resultMatrix = new int[rowsA, colsB];
-
-        foreach (var group in groupedResults)
-        {
-            int i = group.Key.Item1;
-            int j = group.Key.Item2;
-            int sum = group.Sum(tuple => tuple.Item3);
-            resultMatrix[i, j] = sum;
-        }
-
-        return resultMatrix;
+        return mapInput;
     }
 
-    static void PrintMatrix(int[,] matrix)
+    // Застосовує функцію Map до кожної пари індексів та отримує результати
+    static List<KeyValuePair<int, int>> MapReduce(List<KeyValuePair<int, int>> mapInput, int[,] matrixA, int[,] matrixB)
     {
-        int rows = matrix.GetLength(0);
-        int cols = matrix.GetLength(1);
+        // Застосування Map
+        var mapOutput = mapInput.Select(item => Map(item, matrixA, matrixB));
 
-        for (int i = 0; i < rows; i++)
+        // Групування за ключем та застосування Reduce
+        var reduceOutput = mapOutput.GroupBy(item => item.Key)
+                                    .Select(group => Reduce(group.Key, group.Select(item => item.Value)));
+
+        return reduceOutput.ToList();
+    }
+
+    // Виконує множення матриці A на матрицю B за заданими індексами
+    static KeyValuePair<int, int> Map(KeyValuePair<int, int> input, int[,] matrixA, int[,] matrixB)
+    {
+        int row = input.Key;
+        int col = input.Value;
+
+        int sum = 0;
+        for (int k = 0; k < matrixA.GetLength(1); k++)
         {
-            for (int j = 0; j < cols; j++)
-            {
-                Console.Write(matrix[i, j] + " ");
-            }
-            Console.WriteLine();
+            sum += matrixA[row, k] * matrixB[k, col];
+        }
+
+        return new KeyValuePair<int, int>(row, sum);
+    }
+
+    // Виконує сумування значень за однаковим ключем (індексом рядка)
+    static KeyValuePair<int, int> Reduce(int key, IEnumerable<int> values)
+    {
+        int sum = values.Sum();
+        return new KeyValuePair<int, int>(key, sum);
+    }
+
+    // Виводить результат у вигляді матриці
+    static void PrintMatrix(List<KeyValuePair<int, int>> matrix)
+    {
+        foreach (var item in matrix)
+        {
+            Console.WriteLine($"Рядок: {item.Key}, Значення: {item.Value}");
         }
     }
 }
